@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import AVFoundation
+import CoreImage
 
 enum ScanMode:Int{
     case QR
@@ -124,7 +125,9 @@ public class SwiftFlutterBarcodeScannerPlugin: NSObject, FlutterPlugin, ScanBarc
                     }
                 }}
         }else {
-            showAlertDialog(title: "Unable to proceed", message: "Camera not available")
+            //showAlertDialog(title: "Unable to proceed", message: "Camera not available")
+            SwiftFlutterBarcodeScannerPlugin.viewController.present(controller
+                                                                    , animated: true)
         }
     }
     
@@ -211,7 +214,17 @@ class BarcodeScannerViewController: UIViewController {
         
         return button
     }()
-    
+
+    /// Create gallery button
+    private lazy var openGalleryButton : UIButton! = {
+         let button = UIButton()
+
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle("Gallery", for: .normal)
+        //button.setImage(UIImage(named: "ic_switch_camera", in: Bundle(for: SwiftFlutterBarcodeScannerPlugin.self), compatibleWith: nil),for: .normal)
+        button.addTarget(self, action: #selector(self.openGalleryButtonClicked), for: .touchUpInside)
+        return button
+    }()
     
     /// Create and return cancel button
     public lazy var cancelButton: UIButton! = {
@@ -259,6 +272,7 @@ class BarcodeScannerViewController: UIViewController {
         // Get the back-facing camera for capturing videos
         guard let captureDevice = deviceDiscoverySession.devices.first else {
             print("Failed to get the camera device")
+            setConstraintsForControls();
             return
         }
         
@@ -361,18 +375,25 @@ class BarcodeScannerViewController: UIViewController {
     private func setConstraintsForControls() {
         self.view.addSubview(bottomView)
         self.view.addSubview(cancelButton)
+        let cameraAvailable = UIImagePickerController.isSourceTypeAvailable(.camera)
+        if cameraAvailable{
         self.view.addSubview(flashIcon)
-        self.view.addSubview(switchCameraButton)
+        }
+        //self.view.addSubview(switchCameraButton)
+        self.view.addSubview(openGalleryButton)
         
         bottomView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant:0).isActive = true
         bottomView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant:0).isActive = true
         bottomView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant:0).isActive = true
         bottomView.heightAnchor.constraint(equalToConstant:self.isOrientationPortrait ? 100.0 : 70.0).isActive=true
         
+        if cameraAvailable{
         flashIcon.centerXAnchor.constraint(equalTo: view.centerXAnchor).isActive = true
         flashIcon.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -10).isActive = true
         flashIcon.heightAnchor.constraint(equalToConstant: 40.0).isActive = true
         flashIcon.widthAnchor.constraint(equalToConstant: 40.0).isActive = true
+            
+        }
         
         cancelButton.translatesAutoresizingMaskIntoConstraints = false
         cancelButton.widthAnchor.constraint(equalToConstant: 100.0).isActive = true
@@ -380,11 +401,11 @@ class BarcodeScannerViewController: UIViewController {
         cancelButton.bottomAnchor.constraint(equalTo:view.bottomAnchor,constant: 0).isActive=true
         cancelButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant:10).isActive = true
         
-        switchCameraButton.translatesAutoresizingMaskIntoConstraints = false
+        openGalleryButton.translatesAutoresizingMaskIntoConstraints = false
         // A little bit to the right.
-        switchCameraButton.leftAnchor.constraint(equalTo: view.leftAnchor, constant: 10).isActive = true
-        switchCameraButton.heightAnchor.constraint(equalToConstant: 70.0).isActive = true
-        switchCameraButton.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: 0).isActive = true
+        openGalleryButton.leftAnchor.constraint(equalTo: view.leftAnchor, constant: 10).isActive = true
+        openGalleryButton.heightAnchor.constraint(equalToConstant: 70.0).isActive = true
+        openGalleryButton.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: 0).isActive = true
     }
     
     /// Flash button click event listener
@@ -488,6 +509,28 @@ class BarcodeScannerViewController: UIViewController {
             return
         }
     }
+
+    @IBAction private func openGalleryButtonClicked() {
+            // Get the current active input.
+            let picker = UIImagePickerController()
+            picker.delegate = self
+            picker.sourceType = .photoLibrary
+            self.present(picker, animated: true, completion: nil)
+        }
+
+    private func performQRCodeDetection(image: CIImage) -> (outImage: CIImage?, decode: String) {
+            var resultImage: CIImage?
+            var decode = ""
+            var detector: CIDetector? = nil
+            detector = CIDetector(ofType: CIDetectorTypeQRCode, context: nil, options: [CIDetectorAccuracy:CIDetectorAccuracyHigh])
+            if let detector = detector {
+                let features = detector.features(in: image)
+                for feature in features as! [CIQRCodeFeature] {
+                    decode = feature.messageString!
+                }
+            }
+            return (resultImage, decode)
+        }
     
     private func getCaptureDeviceFromCurrentSession(session: AVCaptureSession) -> AVCaptureDevice? {
         // Get the current active input.
@@ -560,9 +603,9 @@ class BarcodeScannerViewController: UIViewController {
     }
     
     private func launchApp(decodedURL: String) {
-        if presentedViewController != nil {
+        /*if presentedViewController != nil {
             return
-        }
+        }*/
         if self.delegate != nil {
             self.dismiss(animated: true, completion: {
                 self.delegate?.userDidScanWith(barcode: decodedURL)
@@ -593,6 +636,33 @@ extension BarcodeScannerViewController: AVCaptureMetadataOutputObjectsDelegate {
                 }
             }
         }
+    }
+}
+
+extension BarcodeScannerViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate
+{
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any])
+        {
+            if let image = info[UIImagePickerController.InfoKey(rawValue: UIImagePickerController.InfoKey.originalImage.rawValue)] as? UIImage {
+                // use the image
+                if let imageCI = CIImage(image: image) {
+                    let result = self.performQRCodeDetection(image: imageCI)
+                    //qrImageView.image = UIImage(ciImage: result.outImage!)
+                    //resultLabel.text = result.decode
+                    if let code = result.decode as? String
+                    {
+                        launchApp(decodedURL: code)
+                    }
+                }
+            } else{
+                print("Something went wrong")
+            }
+
+            dismiss(animated: true, completion: nil)
+        }
+    
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        dismiss(animated: true, completion: nil)
     }
 }
 
