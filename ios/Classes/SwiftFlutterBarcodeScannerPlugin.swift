@@ -192,20 +192,32 @@ class BarcodeScannerViewController: UIViewController {
         return view
     }()
     
+    private lazy var flashView : UIView! = {
+        let view = UIView()
+        view.backgroundColor = UIColor.clear
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+    
+    private lazy var galleryView : UIView! = {
+        let view = UIView()
+        view.backgroundColor = UIColor.clear
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+    
     /// Create and return flash button
     private lazy var flashIcon : UIButton! = {
-        let flashButton = UIButton()
-        flashButton.setTitle("Flash",for:.normal)
-        flashButton.translatesAutoresizingMaskIntoConstraints=false
+        let flashButton = UIButton(frame: CGRect(x: 0, y: 0, width: 40, height: 40))
         
-        flashButton.setImage(UIImage(named: "ic_flash_off", in: Bundle(for: SwiftFlutterBarcodeScannerPlugin.self), compatibleWith: nil),for:.normal)
-        
+        flashButton.setImage(UIImage(named: "ic_flash_off"), for: .normal)//(UIImage(named: "ic_flash_off.pdf", in: Bundle(for: SwiftFlutterBarcodeScannerPlugin.self), compatibleWith: nil),for:.normal)
+        flashButton.backgroundColor = UIColor(red: 59.0/255.0, green: 64.0/255.0, blue: 69.0/255.0, alpha: 1.0)
         flashButton.addTarget(self, action: #selector(BarcodeScannerViewController.flashButtonClicked), for: .touchUpInside)
         return flashButton
     }()
     
     /// Create and return switch camera button
-    private lazy var switchCameraButton : UIButton! = {
+    /*private lazy var switchCameraButton : UIButton! = {
         let button = UIButton()
         
         button.translatesAutoresizingMaskIntoConstraints = false
@@ -213,15 +225,16 @@ class BarcodeScannerViewController: UIViewController {
         button.addTarget(self, action: #selector(BarcodeScannerViewController.switchCameraButtonClicked), for: .touchUpInside)
         
         return button
-    }()
+    }()*/
 
     /// Create gallery button
     private lazy var openGalleryButton : UIButton! = {
-         let button = UIButton()
-
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.setTitle("Gallery", for: .normal)
-        //button.setImage(UIImage(named: "ic_switch_camera", in: Bundle(for: SwiftFlutterBarcodeScannerPlugin.self), compatibleWith: nil),for: .normal)
+        let button = UIButton(frame: CGRect(x: 0, y: 0, width: 40, height: 40))
+        button.imageEdgeInsets = UIEdgeInsets(top: 7, left: 7, bottom: 7, right: 7)
+        //button.translatesAutoresizingMaskIntoConstraints = false
+        //button.setTitle("Gallery", for: .normal)
+        button.setImage(UIImage(named: "ic_library"), for: .normal)//setImage(UIImage(named: "ic_library", in: Bundle(for: SwiftFlutterBarcodeScannerPlugin.self), compatibleWith: nil),for: .normal)
+        button.backgroundColor = UIColor(red: 59.0/255.0, green: 64.0/255.0, blue: 69.0/255.0, alpha: 1.0)
         button.addTarget(self, action: #selector(self.openGalleryButtonClicked), for: .touchUpInside)
         return button
     }()
@@ -356,7 +369,7 @@ class BarcodeScannerViewController: UIViewController {
             self.view.bringSubviewToFront(qrCodeFrameView)
             qrCodeFrameView.layer.insertSublayer(fillLayer, below: videoPreviewLayer!)
             self.view.bringSubviewToFront(bottomView)
-            self.view.bringSubviewToFront(flashIcon)
+            self.view.bringSubviewToFront(flashView)
             if(!SwiftFlutterBarcodeScannerPlugin.isShowFlashIcon){
                 flashIcon.isHidden=true
             }
@@ -364,7 +377,7 @@ class BarcodeScannerViewController: UIViewController {
             qrCodeFrameView.layoutSubviews()
             qrCodeFrameView.setNeedsUpdateConstraints()
             self.view.bringSubviewToFront(cancelButton)
-            self.view.bringSubviewToFront(switchCameraButton)
+            self.view.bringSubviewToFront(galleryView)
         }
         setConstraintsForControls()
         self.drawLine()
@@ -376,36 +389,46 @@ class BarcodeScannerViewController: UIViewController {
         self.view.addSubview(bottomView)
         self.view.addSubview(cancelButton)
         let cameraAvailable = UIImagePickerController.isSourceTypeAvailable(.camera)
-        if cameraAvailable{
-        self.view.addSubview(flashIcon)
-        }
+        //if cameraAvailable{
+        self.flashView.addSubview(flashIcon)
+        self.view.addSubview(flashView)
+        //}
         //self.view.addSubview(switchCameraButton)
-        self.view.addSubview(openGalleryButton)
+        self.galleryView.addSubview(openGalleryButton)
+        self.view.addSubview(galleryView)
+        
+        flashIcon.layer.masksToBounds = true
+        flashIcon.layer.cornerRadius = flashIcon.frame.size.height/2
+        
+        openGalleryButton.layer.masksToBounds = true
+        openGalleryButton.layer.cornerRadius = openGalleryButton.frame.size.height/2
         
         bottomView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant:0).isActive = true
         bottomView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant:0).isActive = true
         bottomView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant:0).isActive = true
-        bottomView.heightAnchor.constraint(equalToConstant:self.isOrientationPortrait ? 100.0 : 70.0).isActive=true
+        bottomView.heightAnchor.constraint(equalToConstant:self.isOrientationPortrait ? 0 : 0).isActive=true
         
-        if cameraAvailable{
-        flashIcon.centerXAnchor.constraint(equalTo: view.centerXAnchor).isActive = true
-        flashIcon.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -10).isActive = true
-        flashIcon.heightAnchor.constraint(equalToConstant: 40.0).isActive = true
-        flashIcon.widthAnchor.constraint(equalToConstant: 40.0).isActive = true
+        //if cameraAvailable{
+        flashView.centerXAnchor.constraint(equalTo: view.centerXAnchor, constant: -50).isActive = true
+        flashView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -30).isActive = true
+        flashView.heightAnchor.constraint(equalToConstant: 40.0).isActive = true
+        flashView.widthAnchor.constraint(equalToConstant: 40.0).isActive = true
             
-        }
+        //}
         
         cancelButton.translatesAutoresizingMaskIntoConstraints = false
         cancelButton.widthAnchor.constraint(equalToConstant: 100.0).isActive = true
         cancelButton.heightAnchor.constraint(equalToConstant: 70.0).isActive = true
-        cancelButton.bottomAnchor.constraint(equalTo:view.bottomAnchor,constant: 0).isActive=true
-        cancelButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant:10).isActive = true
+        cancelButton.topAnchor.constraint(equalTo: view.topAnchor, constant: 20).isActive = true
+        cancelButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant:10).isActive = true
         
-        openGalleryButton.translatesAutoresizingMaskIntoConstraints = false
+        //openGalleryButton.translatesAutoresizingMaskIntoConstraints = false
         // A little bit to the right.
-        openGalleryButton.leftAnchor.constraint(equalTo: view.leftAnchor, constant: 10).isActive = true
-        openGalleryButton.heightAnchor.constraint(equalToConstant: 70.0).isActive = true
-        openGalleryButton.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: 0).isActive = true
+        
+        galleryView.centerXAnchor.constraint(equalTo: view.centerXAnchor, constant: 50).isActive = true
+        galleryView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -30).isActive = true
+        galleryView.heightAnchor.constraint(equalToConstant: 40.0).isActive = true
+        galleryView.widthAnchor.constraint(equalToConstant: 40.0).isActive = true
     }
     
     /// Flash button click event listener
@@ -418,11 +441,11 @@ class BarcodeScannerViewController: UIViewController {
     }
     
     private func flashIconOff() {
-        flashIcon.setImage(UIImage(named: "ic_flash_off", in: Bundle(for: SwiftFlutterBarcodeScannerPlugin.self), compatibleWith: nil),for:.normal)
+        flashIcon.setImage(UIImage(named: "ic_flash_off"), for: .normal)//setImage(UIImage(named: "ic_flash_off.pdf", in: Bundle(for: SwiftFlutterBarcodeScannerPlugin.self), compatibleWith: nil),for:.normal)
     }
     
     private func flashIconOn() {
-        flashIcon.setImage(UIImage(named: "ic_flash_on", in: Bundle(for: SwiftFlutterBarcodeScannerPlugin.self), compatibleWith: nil),for:.normal)
+        flashIcon.setImage(UIImage(named: "ic_flash_on"), for: .normal)//setImage(UIImage(named: "ic_flash_on", in: Bundle(for: SwiftFlutterBarcodeScannerPlugin.self), compatibleWith: nil),for:.normal)
     }
     
     private func setFlashStatus(device: AVCaptureDevice, mode: AVCaptureDevice.TorchMode) {
