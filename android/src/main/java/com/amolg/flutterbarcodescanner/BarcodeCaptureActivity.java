@@ -471,8 +471,8 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
             }
         } else if (i == R.id.btnBarcodeCaptureCancel) {
             Barcode barcode = new Barcode();
-            barcode.rawValue = "-1";
-            barcode.displayValue = "-1";
+            barcode.rawValue = "-2";
+            barcode.displayValue = "-2";
             FlutterBarcodeScannerPlugin.onBarcodeScanReceiver(barcode);
             finish();
         } else if (i == R.id.imgViewPickImage) {
