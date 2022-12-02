@@ -503,12 +503,12 @@ class BarcodeScannerViewController: UIViewController {
     @IBAction private func cancelButtonClicked() {
         if SwiftFlutterBarcodeScannerPlugin.isContinuousScan{
             self.dismiss(animated: true, completion: {
-                SwiftFlutterBarcodeScannerPlugin.onBarcodeScanReceiver(barcode: "-1")
+                SwiftFlutterBarcodeScannerPlugin.onBarcodeScanReceiver(barcode: "-2")
             })
         }else{
             if self.delegate != nil {
                 self.dismiss(animated: true, completion: {
-                    self.delegate?.userDidScanWith(barcode: "-1")
+                    self.delegate?.userDidScanWith(barcode: "-2")
                 })
             }
         }
