@@ -369,9 +369,11 @@ class BarcodeScannerViewController: UIViewController {
             self.view.bringSubviewToFront(qrCodeFrameView)
             qrCodeFrameView.layer.insertSublayer(fillLayer, below: videoPreviewLayer!)
             self.view.bringSubviewToFront(bottomView)
-            self.view.bringSubviewToFront(flashView)
-            if(!SwiftFlutterBarcodeScannerPlugin.isShowFlashIcon){
-                flashIcon.isHidden=true
+            if UIImagePickerController.isSourceTypeAvailable(.camera){
+                self.view.bringSubviewToFront(flashView)
+                if(!SwiftFlutterBarcodeScannerPlugin.isShowFlashIcon){
+                    flashIcon.isHidden = true
+                }
             }
             qrCodeFrameView.layoutIfNeeded()
             qrCodeFrameView.layoutSubviews()
@@ -383,54 +385,52 @@ class BarcodeScannerViewController: UIViewController {
         self.drawLine()
         processCompletionCallback()
     }
-    
+
     /// Apply constraints to ui components
     private func setConstraintsForControls() {
         self.view.addSubview(bottomView)
         self.view.addSubview(cancelButton)
         let cameraAvailable = UIImagePickerController.isSourceTypeAvailable(.camera)
-        //if cameraAvailable{
-        self.flashView.addSubview(flashIcon)
-        self.view.addSubview(flashView)
-        //}
+        if cameraAvailable{
+            self.flashView.addSubview(flashIcon)
+            self.view.addSubview(flashView)
+            flashIcon.layer.masksToBounds = true
+            flashIcon.layer.cornerRadius = flashIcon.frame.size.height/2
+        }
         //self.view.addSubview(switchCameraButton)
         self.galleryView.addSubview(openGalleryButton)
         self.view.addSubview(galleryView)
-        
-        flashIcon.layer.masksToBounds = true
-        flashIcon.layer.cornerRadius = flashIcon.frame.size.height/2
-        
+
         openGalleryButton.layer.masksToBounds = true
         openGalleryButton.layer.cornerRadius = openGalleryButton.frame.size.height/2
-        
+
         bottomView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant:0).isActive = true
         bottomView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant:0).isActive = true
         bottomView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant:0).isActive = true
         bottomView.heightAnchor.constraint(equalToConstant:self.isOrientationPortrait ? 0 : 0).isActive=true
-        
-        //if cameraAvailable{
-        flashView.centerXAnchor.constraint(equalTo: view.centerXAnchor, constant: -50).isActive = true
-        flashView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -30).isActive = true
-        flashView.heightAnchor.constraint(equalToConstant: 40.0).isActive = true
-        flashView.widthAnchor.constraint(equalToConstant: 40.0).isActive = true
-            
-        //}
-        
+
+        if cameraAvailable{
+            flashView.centerXAnchor.constraint(equalTo: view.centerXAnchor, constant: -50).isActive = true
+            flashView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -30).isActive = true
+            flashView.heightAnchor.constraint(equalToConstant: 40.0).isActive = true
+            flashView.widthAnchor.constraint(equalToConstant: 40.0).isActive = true
+        }
+
         cancelButton.translatesAutoresizingMaskIntoConstraints = false
         cancelButton.widthAnchor.constraint(equalToConstant: 100.0).isActive = true
         cancelButton.heightAnchor.constraint(equalToConstant: 70.0).isActive = true
         cancelButton.topAnchor.constraint(equalTo: view.topAnchor, constant: 20).isActive = true
         cancelButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant:10).isActive = true
-        
+
         //openGalleryButton.translatesAutoresizingMaskIntoConstraints = false
         // A little bit to the right.
-        
+
         galleryView.centerXAnchor.constraint(equalTo: view.centerXAnchor, constant: 50).isActive = true
         galleryView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -30).isActive = true
         galleryView.heightAnchor.constraint(equalToConstant: 40.0).isActive = true
         galleryView.widthAnchor.constraint(equalToConstant: 40.0).isActive = true
     }
-    
+
     /// Flash button click event listener
     @IBAction private func flashButtonClicked() {
         if #available(iOS 10.0, *) {
@@ -439,24 +439,24 @@ class BarcodeScannerViewController: UIViewController {
             /// Handle further checks
         }
     }
-    
+
     private func flashIconOff() {
         flashIcon.setImage(UIImage(named: "ic_flash_off"), for: .normal)//setImage(UIImage(named: "ic_flash_off.pdf", in: Bundle(for: SwiftFlutterBarcodeScannerPlugin.self), compatibleWith: nil),for:.normal)
     }
-    
+
     private func flashIconOn() {
         flashIcon.setImage(UIImage(named: "ic_flash_on"), for: .normal)//setImage(UIImage(named: "ic_flash_on", in: Bundle(for: SwiftFlutterBarcodeScannerPlugin.self), compatibleWith: nil),for:.normal)
     }
-    
+
     private func setFlashStatus(device: AVCaptureDevice, mode: AVCaptureDevice.TorchMode) {
         guard device.hasTorch else {
             flashIconOff()
             return
         }
-        
+
         do {
             try device.lockForConfiguration()
-            
+
             if (mode == .off) {
                 device.torchMode = AVCaptureDevice.TorchMode.off
                 flashIconOff()
@@ -469,13 +469,13 @@ class BarcodeScannerViewController: UIViewController {
                     print(error)
                 }
             }
-            
+
             device.unlockForConfiguration()
         } catch {
             print(error)
         }
     }
-    
+
     /// Toggle flash and change flash icon
     func toggleFlash() {
         guard let device = getCaptureDeviceFromCurrentSession(session: captureSession) else {
@@ -810,3 +810,4 @@ func hexStringToUIColor (hex:String) -> UIColor {
         alpha: aValue
     )
 }
+
