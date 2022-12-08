@@ -369,11 +369,9 @@ class BarcodeScannerViewController: UIViewController {
             self.view.bringSubviewToFront(qrCodeFrameView)
             qrCodeFrameView.layer.insertSublayer(fillLayer, below: videoPreviewLayer!)
             self.view.bringSubviewToFront(bottomView)
-            if UIImagePickerController.isSourceTypeAvailable(.camera){
+            if SwiftFlutterBarcodeScannerPlugin.isShowFlashIcon{
                 self.view.bringSubviewToFront(flashView)
-                if(!SwiftFlutterBarcodeScannerPlugin.isShowFlashIcon){
-                    flashIcon.isHidden = true
-                }
+                flashIcon.isHidden = false
             }
             qrCodeFrameView.layoutIfNeeded()
             qrCodeFrameView.layoutSubviews()
@@ -390,8 +388,7 @@ class BarcodeScannerViewController: UIViewController {
     private func setConstraintsForControls() {
         self.view.addSubview(bottomView)
         self.view.addSubview(cancelButton)
-        let cameraAvailable = UIImagePickerController.isSourceTypeAvailable(.camera)
-        if cameraAvailable{
+        if SwiftFlutterBarcodeScannerPlugin.isShowFlashIcon{
             self.flashView.addSubview(flashIcon)
             self.view.addSubview(flashView)
             flashIcon.layer.masksToBounds = true
@@ -409,7 +406,7 @@ class BarcodeScannerViewController: UIViewController {
         bottomView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant:0).isActive = true
         bottomView.heightAnchor.constraint(equalToConstant:self.isOrientationPortrait ? 0 : 0).isActive=true
 
-        if cameraAvailable{
+        if SwiftFlutterBarcodeScannerPlugin.isShowFlashIcon{
             flashView.centerXAnchor.constraint(equalTo: view.centerXAnchor, constant: -50).isActive = true
             flashView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -30).isActive = true
             flashView.heightAnchor.constraint(equalToConstant: 40.0).isActive = true
@@ -424,8 +421,13 @@ class BarcodeScannerViewController: UIViewController {
 
         //openGalleryButton.translatesAutoresizingMaskIntoConstraints = false
         // A little bit to the right.
-
-        galleryView.centerXAnchor.constraint(equalTo: view.centerXAnchor, constant: 50).isActive = true
+        if SwiftFlutterBarcodeScannerPlugin.isShowFlashIcon {
+            galleryView.centerXAnchor.constraint(equalTo: view.centerXAnchor, constant: 50).isActive = true
+        }
+        else{
+            galleryView.centerXAnchor.constraint(equalTo: view.centerXAnchor, constant: 0).isActive = true
+        }
+        
         galleryView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -30).isActive = true
         galleryView.heightAnchor.constraint(equalToConstant: 40.0).isActive = true
         galleryView.widthAnchor.constraint(equalToConstant: 40.0).isActive = true
