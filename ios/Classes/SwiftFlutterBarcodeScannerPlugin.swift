@@ -172,7 +172,7 @@ class BarcodeScannerViewController: UIViewController {
     private var topBottomMargin: CGFloat = 80
     private var scanLine: UIView = UIView()
     var screenSize = UIScreen.main.bounds
-    private var isOrientationPortrait = true
+    private var isOrientationPortrait = (UIDevice.current.orientation == .portrait || UIDevice.current.orientation == .portraitUpsideDown)
     var screenHeight:CGFloat = 0
     let captureMetadataOutput = AVCaptureMetadataOutput()
     
