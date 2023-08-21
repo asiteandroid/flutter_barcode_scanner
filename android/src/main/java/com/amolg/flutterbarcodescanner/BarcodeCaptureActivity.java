@@ -118,9 +118,7 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
     public void onCreate(Bundle icicle) {
         super.onCreate(icicle);
         try {
-            if(getIntent().getBooleanExtra("isShowOnlyPortrait", false)) {
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-            }
+
             setContentView(R.layout.barcode_capture);
 
             String buttonText = "";

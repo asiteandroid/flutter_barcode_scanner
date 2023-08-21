@@ -24,7 +24,7 @@ class FlutterBarcodeScanner {
   /// displayed if [isShowFlashIcon] is true. The text of the cancel button can
   /// be customized with the [cancelButtonText] string.
   static Future<String> scanBarcode(String lineColor, String cancelButtonText,
-      bool isShowFlashIcon, ScanMode scanMode, bool isShowOnlyPortrait) async {
+      bool isShowFlashIcon, ScanMode scanMode) async {
     if (cancelButtonText.isEmpty) {
       cancelButtonText = 'Cancel';
     }
@@ -36,7 +36,6 @@ class FlutterBarcodeScanner {
       'isShowFlashIcon': isShowFlashIcon,
       'isContinuousScan': false,
       'scanMode': scanMode.index,
-      'isShowOnlyPortrait': isShowOnlyPortrait
     };
 
     /// Get barcode scan result
