@@ -215,6 +215,12 @@ class BarcodeScannerViewController: UIViewController {
         flashButton.addTarget(self, action: #selector(BarcodeScannerViewController.flashButtonClicked), for: .touchUpInside)
         return flashButton
     }()
+
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask{
+            get{
+                return UIDevice.current.userInterfaceIdiom == .phone ? [.portrait, . portraitUpsideDown]:.all //OBS -> You can also return an array
+            }
+        }
     
     /// Create and return switch camera button
     /*private lazy var switchCameraButton : UIButton! = {
