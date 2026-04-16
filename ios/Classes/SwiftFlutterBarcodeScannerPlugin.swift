@@ -23,13 +23,15 @@ public class SwiftFlutterBarcodeScannerPlugin: NSObject, FlutterPlugin, ScanBarc
     public static var isContinuousScan:Bool=false
     static var barcodeStream:FlutterEventSink?=nil
     public static var scanMode = ScanMode.QR.index
-    
+    private var registrar: FlutterPluginRegistrar?
+
     public static func register(with registrar: FlutterPluginRegistrar) {
-        viewController = (UIApplication.shared.delegate?.window??.rootViewController)!
         let channel = FlutterMethodChannel(name: "flutter_barcode_scanner", binaryMessenger: registrar.messenger())
         let instance = SwiftFlutterBarcodeScannerPlugin()
+        instance.registrar = registrar // Store registrar to find window later
         registrar.addMethodCallDelegate(instance, channel: channel)
-        let eventChannel=FlutterEventChannel(name: "flutter_barcode_scanner_receiver", binaryMessenger: registrar.messenger())
+        
+        let eventChannel = FlutterEventChannel(name: "flutter_barcode_scanner_receiver", binaryMessenger: registrar.messenger())
         eventChannel.setStreamHandler(instance)
     }
     
@@ -57,78 +59,74 @@ public class SwiftFlutterBarcodeScannerPlugin: NSObject, FlutterPlugin, ScanBarc
     }
     
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        let args:Dictionary<String, AnyObject> = call.arguments as! Dictionary<String, AnyObject>;
-        if let colorCode = args["lineColor"] as? String{
-            SwiftFlutterBarcodeScannerPlugin.lineColor = colorCode
-        }else {
-            SwiftFlutterBarcodeScannerPlugin.lineColor = "#ff6666"
+        if (self.pendingResult != nil && call.method == "scanBarcode") {
+            self.pendingResult = nil
         }
-        if let buttonText = args["cancelButtonText"] as? String{
-            SwiftFlutterBarcodeScannerPlugin.cancelButtonText = buttonText
-        }else {
-            SwiftFlutterBarcodeScannerPlugin.cancelButtonText = "Cancel"
-        }
-        if let flashStatus = args["isShowFlashIcon"] as? Bool{
-            SwiftFlutterBarcodeScannerPlugin.isShowFlashIcon = flashStatus
-        }else {
-            SwiftFlutterBarcodeScannerPlugin.isShowFlashIcon = false
-        }
-        if let isContinuousScan = args["isContinuousScan"] as? Bool{
-            SwiftFlutterBarcodeScannerPlugin.isContinuousScan = isContinuousScan
-        }else {
-            SwiftFlutterBarcodeScannerPlugin.isContinuousScan = false
-        }
-        
-        if let scanModeReceived = args["scanMode"] as? Int {
-            if scanModeReceived == ScanMode.DEFAULT.index {
-                SwiftFlutterBarcodeScannerPlugin.scanMode = ScanMode.QR.index
-            }else{
-                SwiftFlutterBarcodeScannerPlugin.scanMode = scanModeReceived
-            }
-        }else{
-            SwiftFlutterBarcodeScannerPlugin.scanMode = ScanMode.QR.index
-        }
-        
-        pendingResult=result
-        let controller = BarcodeScannerViewController()
-        controller.delegate = self
-        
-        if #available(iOS 13.0, *) {
-            controller.modalPresentationStyle = .fullScreen
-        }
-        
-        if checkCameraAvailability(){
-            if checkForCameraPermission() {
-                SwiftFlutterBarcodeScannerPlugin.viewController.present(controller
-                                                                        , animated: true) {
-                    
+
+        if (call.method == "scanBarcode") {
+            self.pendingResult = result
+            let args = call.arguments as! Dictionary<String, Any>
+            
+            SwiftFlutterBarcodeScannerPlugin.lineColor = args["lineColor"] as? String ?? "#ff6666"
+            SwiftFlutterBarcodeScannerPlugin.cancelButtonText = args["cancelButtonText"] as? String ?? "Cancel"
+            SwiftFlutterBarcodeScannerPlugin.isShowFlashIcon = args["isShowFlashIcon"] as? Bool ?? false
+            SwiftFlutterBarcodeScannerPlugin.isContinuousScan = args["isContinuousScan"] as? Bool ?? false
+            
+            let scanModeReceived = args["scanMode"] as? Int ?? ScanMode.QR.index
+            SwiftFlutterBarcodeScannerPlugin.scanMode = (scanModeReceived == ScanMode.DEFAULT.index) ? ScanMode.QR.index : scanModeReceived
+            
+            DispatchQueue.main.async {
+                let keyWindow = UIApplication.shared.connectedScenes
+                    .filter({$0.activationState == .foregroundActive})
+                    .map({$0 as? UIWindowScene})
+                    .compactMap({$0})
+                    .first?.windows
+                    .filter({$0.isKeyWindow}).first
+
+                guard let rootVC = keyWindow?.rootViewController else {
+                    self.pendingResult = nil
+                    result(FlutterError(code: "NO_WINDOW", message: "Window hierarchy not found", details: nil))
+                    return
                 }
-            }else {
-                AVCaptureDevice.requestAccess(for: .video) { success in
-                    DispatchQueue.main.async {
-                        if success {
-                            SwiftFlutterBarcodeScannerPlugin.viewController.present(controller
-                                                                                    , animated: true) {
-                                
+
+                let controller = BarcodeScannerViewController()
+                controller.delegate = self
+                controller.modalPresentationStyle = .fullScreen
+                
+                if self.checkCameraAvailability() {
+                    if self.checkForCameraPermission() {
+                        rootVC.present(controller, animated: true, completion: nil)
+                    } else {
+                        AVCaptureDevice.requestAccess(for: .video) { success in
+                            DispatchQueue.main.async {
+                                if success {
+                                    rootVC.present(controller, animated: true, completion: nil)
+                                } else {
+                                    self.showPermissionAlert(on: rootVC)
+                                    self.pendingResult = nil
+                                    result(FlutterError(code: "PERMISSION_DENIED", message: "Camera permission denied", details: nil))
+                                }
                             }
-                        } else {
-                            let alert = UIAlertController(title: "Action needed", message: "Please grant camera permission to use barcode scanner", preferredStyle: .alert)
-                            
-                            alert.addAction(UIAlertAction(title: "Grant", style: .default, handler: { action in
-                                UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
-                            }))
-                            
-                            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-                            
-                            SwiftFlutterBarcodeScannerPlugin.viewController.present(alert, animated: true)
                         }
                     }
-                }}
-        }else {
-            //showAlertDialog(title: "Unable to proceed", message: "Camera not available")
-            SwiftFlutterBarcodeScannerPlugin.viewController.present(controller
-                                                                    , animated: true)
+                } else {
+                    rootVC.present(controller, animated: true, completion: nil)
+                }
+            }
+        } else {
+            result(FlutterMethodNotImplemented)
         }
+    }
+
+    private func showPermissionAlert(on rootVC: UIViewController) {
+        let alert = UIAlertController(title: "Camera Required", message: "Please enable camera access in settings.", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Settings", style: .default) { _ in
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        })
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        rootVC.present(alert, animated: true)
     }
     
     public func userDidScanWith(barcode: String){
@@ -141,6 +139,24 @@ public class SwiftFlutterBarcodeScannerPlugin: NSObject, FlutterPlugin, ScanBarc
         let alertAction = UIAlertAction(title: "Ok", style: .default, handler: nil)
         alertController.addAction(alertAction)
         SwiftFlutterBarcodeScannerPlugin.viewController.present(alertController, animated: true, completion: nil)
+    }
+    
+    public func userDidProvide(_ barcode: String) {
+        if (SwiftFlutterBarcodeScannerPlugin.isContinuousScan) {
+            SwiftFlutterBarcodeScannerPlugin.barcodeStream?(barcode)
+        } else {
+            if (self.pendingResult != nil) {
+                self.pendingResult(barcode)
+                self.pendingResult = nil
+            }
+        }
+    }
+
+    public func userDidCancel() {
+        if (self.pendingResult != nil) {
+            self.pendingResult("") // Return empty string to Flutter
+            self.pendingResult = nil // IMPORTANT: Must set to nil
+        }
     }
 }
 
@@ -354,8 +370,9 @@ class BarcodeScannerViewController: UIViewController {
         view.layer.addSublayer(videoPreviewLayer!)
         
         
-        // Start video capture.
-        captureSession.startRunning()
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.captureSession.startRunning()
+        }
         
         let scanRect = CGRect(x: xCor, y: yCor, width: self.isOrientationPortrait ? (screenSize.width*0.8) : (screenSize.height*0.8), height: screenHeight)
         
