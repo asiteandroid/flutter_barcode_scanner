@@ -145,6 +145,10 @@ public class FlutterBarcodeScannerPlugin implements MethodCallHandler, ActivityR
     @Override
     public boolean onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == RC_BARCODE_CAPTURE) {
+            if (pendingResult == null) {
+                Log.e(TAG, "[onActivityResult] pendingResult is null. Cannot return result to Flutter.");
+                return false;
+            }
             if (resultCode == CommonStatusCodes.SUCCESS) {
                 if (data != null) {
                     try {
@@ -162,6 +166,9 @@ public class FlutterBarcodeScannerPlugin implements MethodCallHandler, ActivityR
                 return true;
             } else {
                 pendingResult.success("-2");
+                pendingResult = null;
+                arguments = null;
+                return true;
             }
         }
         return false;
