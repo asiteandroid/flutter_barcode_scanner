@@ -87,49 +87,49 @@ public class FlutterBarcodeScannerPlugin implements MethodCallHandler, ActivityR
 
     @Override
     public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
+        if (!call.method.equals("scanBarcode")) {
+            result.notImplemented();
+            return;
+        }
         try {
             pendingResult = result;
-
-            if (call.method.equals("scanBarcode")) {
-                if (!(call.arguments instanceof Map)) {
-                    throw new IllegalArgumentException("Plugin not passing a map as parameter: " + call.arguments);
-                }
-                arguments = (Map<String, Object>) call.arguments;
-                lineColor = (String) arguments.get("lineColor");
-                isShowFlashIcon = (boolean) arguments.get("isShowFlashIcon");
-                if (null == lineColor || lineColor.equalsIgnoreCase("")) {
-                    lineColor = "#DC143C";
-                }
-                if (null != arguments.get("scanMode")) {
-                    if ((int) arguments.get("scanMode") == BarcodeCaptureActivity.SCAN_MODE_ENUM.DEFAULT.ordinal()) {
-                        BarcodeCaptureActivity.SCAN_MODE = BarcodeCaptureActivity.SCAN_MODE_ENUM.QR.ordinal();
-                    } else {
-                        BarcodeCaptureActivity.SCAN_MODE = (int) arguments.get("scanMode");
-                    }
-                } else {
-                    BarcodeCaptureActivity.SCAN_MODE = BarcodeCaptureActivity.SCAN_MODE_ENUM.QR.ordinal();
-                }
-
-                isContinuousScan = (boolean) arguments.get("isContinuousScan");
-                startBarcodeScannerActivityView((String) arguments.get("cancelButtonText"), isContinuousScan, (Boolean) arguments.get("isShowPortrait"));
+            if (!(call.arguments instanceof Map)) {
+                throw new IllegalArgumentException("Plugin not passing a map as parameter: " + call.arguments);
             }
+            arguments = (Map<String, Object>) call.arguments;
+            lineColor = (String) arguments.get("lineColor");
+            isShowFlashIcon = (boolean) arguments.get("isShowFlashIcon");
+            if (null == lineColor || lineColor.equalsIgnoreCase("")) {
+                lineColor = "#DC143C";
+            }
+            if (null != arguments.get("scanMode")) {
+                if ((int) arguments.get("scanMode") == BarcodeCaptureActivity.SCAN_MODE_ENUM.DEFAULT.ordinal()) {
+                    BarcodeCaptureActivity.SCAN_MODE = BarcodeCaptureActivity.SCAN_MODE_ENUM.QR.ordinal();
+                } else {
+                    BarcodeCaptureActivity.SCAN_MODE = (int) arguments.get("scanMode");
+                }
+            } else {
+                BarcodeCaptureActivity.SCAN_MODE = BarcodeCaptureActivity.SCAN_MODE_ENUM.QR.ordinal();
+            }
+
+            isContinuousScan = (boolean) arguments.get("isContinuousScan");
+            startBarcodeScannerActivityView((String) arguments.get("cancelButtonText"), isContinuousScan, (Boolean) arguments.get("isShowPortrait"));
         } catch (Exception e) {
             Log.e(TAG, "onMethodCall: " + e.getLocalizedMessage());
+            pendingResult = null;
+            result.error("scan_failed", e.getMessage(), null);
         }
     }
 
     private void startBarcodeScannerActivityView(String buttonText, boolean isContinuousScan, Boolean isShowPortrait) {
-        try {
-            Intent intent = new Intent(activity, BarcodeCaptureActivity.class)
-                    .putExtra("cancelButtonText", buttonText)
-                    .putExtra("isShowPortrait", isShowPortrait);
-            if (isContinuousScan) {
-                activity.startActivity(intent);
-            } else {
-                activity.startActivityForResult(intent, RC_BARCODE_CAPTURE);
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "startView: " + e.getLocalizedMessage());
+        // Failures propagate to onMethodCall so the Dart future completes with an error.
+        Intent intent = new Intent(activity, BarcodeCaptureActivity.class)
+                .putExtra("cancelButtonText", buttonText)
+                .putExtra("isShowPortrait", isShowPortrait);
+        if (isContinuousScan) {
+            activity.startActivity(intent);
+        } else {
+            activity.startActivityForResult(intent, RC_BARCODE_CAPTURE);
         }
     }
 
@@ -198,18 +198,19 @@ public class FlutterBarcodeScannerPlugin implements MethodCallHandler, ActivityR
      * @param barcode
      */
     public static void onBarcodeScanReceiver(final Barcode barcode) {
-        try {
-            if (barcode != null && !barcode.displayValue.isEmpty()) {
-                activity.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        barcodeStream.success(barcode.rawValue);
-                    }
-                });
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "onBarcodeScanReceiver: " + e.getLocalizedMessage());
+        Activity a = activity;
+        if (barcode == null || barcode.rawValue == null || barcode.rawValue.isEmpty() || a == null) {
+            return;
         }
+        a.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                // Only set while Dart listens (continuous mode); scanBarcode() never subscribes.
+                if (barcodeStream != null) {
+                    barcodeStream.success(barcode.rawValue);
+                }
+            }
+        });
     }
 
     @Override

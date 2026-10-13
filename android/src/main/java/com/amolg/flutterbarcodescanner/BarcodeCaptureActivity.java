@@ -23,10 +23,10 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.hardware.Camera;
 import android.net.Uri;
 import android.os.Build;
@@ -34,7 +34,6 @@ import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 
-import com.google.android.gms.vision.Frame;
 import com.google.android.material.snackbar.Snackbar;
 
 import androidx.annotation.Nullable;
@@ -42,7 +41,6 @@ import androidx.core.app.ActivityCompat;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
-import android.provider.MediaStore;
 import android.util.Log;
 import android.util.SparseArray;
 import android.view.GestureDetector;
@@ -61,10 +59,16 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.vision.MultiProcessor;
+import com.google.android.gms.tasks.Tasks;
 import com.google.android.gms.vision.barcode.Barcode;
-import com.google.android.gms.vision.barcode.BarcodeDetector;
+import com.google.mlkit.vision.barcode.BarcodeScanner;
+import com.google.mlkit.vision.barcode.BarcodeScanning;
+import com.google.mlkit.vision.common.InputImage;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 /**
  * Activity for the multi-tracker app.  This app detects barcodes and displays the value with the
@@ -78,7 +82,6 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
 
     // permission request codes need to be < 256
     private static final int RC_HANDLE_CAMERA_PERM = 2;
-    private static final int RC_HANDLE_GALLERY_PERM = 3;
 
     // constants used to pass extra data in the intent
     public static final String BarcodeObject = "Barcode";
@@ -96,7 +99,7 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
     private ImageView imgViewSwitchCamera;
 
     public static int SCAN_MODE = SCAN_MODE_ENUM.QR.ordinal();
-    private BarcodeDetector barcodeDetector;
+    private static final Executor IMAGE_DECODER = Executors.newSingleThreadExecutor();
 
     public enum SCAN_MODE_ENUM {
         QR,
@@ -149,11 +152,10 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
 
             gestureDetector = new GestureDetector(this, new CaptureGestureListener());
             scaleGestureDetector = new ScaleGestureDetector(this, new ScaleListener());
-            barcodeDetector = new BarcodeDetector.Builder(getApplicationContext())
-                    .setBarcodeFormats(Barcode.DATA_MATRIX | Barcode.QR_CODE)
-                    .build();
 
         } catch (Exception e) {
+            Log.e("BarcodeCaptureActivity", "Scanner setup failed", e);
+            finish();
         }
     }
 
@@ -164,16 +166,10 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
         // Check for the camera permission before accessing the camera.  If the
         // permission is not granted yet, request permission.
         int rc = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA);
-        int rg = ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE);
         if (rc == PackageManager.PERMISSION_GRANTED) {
             createCameraSource(autoFocus, useFlash, CameraSource.CAMERA_FACING_BACK);
         } else {
             requestCameraPermission();
-        }
-        // Check for the camera permission before accessing the camera.  If the
-        // permission is not granted yet, request permission.
-        if (rg != PackageManager.PERMISSION_GRANTED) {
-            requestGalleryReadPermission();
         }
     }
 
@@ -198,37 +194,6 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
             public void onClick(View view) {
                 ActivityCompat.requestPermissions(thisActivity, permissions,
                         RC_HANDLE_CAMERA_PERM);
-            }
-        };
-
-        findViewById(R.id.topLayout).setOnClickListener(listener);
-        Snackbar.make(mGraphicOverlay, R.string.permission_camera_rationale,
-                        Snackbar.LENGTH_INDEFINITE)
-                .setAction(R.string.ok, listener)
-                .show();
-    }
-
-    /**
-     * Handles the requesting of the gallery read permission.  This includes
-     * showing a "Snackbar" message of why the permission is needed then
-     * sending the request.
-     */
-    private void requestGalleryReadPermission() {
-        final String[] permissions = new String[]{Manifest.permission.READ_EXTERNAL_STORAGE};
-
-        if (!ActivityCompat.shouldShowRequestPermissionRationale(this,
-                Manifest.permission.READ_EXTERNAL_STORAGE)) {
-            ActivityCompat.requestPermissions(this, permissions, RC_HANDLE_GALLERY_PERM);
-            return;
-        }
-
-        final Activity thisActivity = this;
-
-        View.OnClickListener listener = new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                ActivityCompat.requestPermissions(thisActivity, permissions,
-                        RC_HANDLE_GALLERY_PERM);
             }
         };
 
@@ -264,21 +229,10 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
         // is set to receive the barcode detection results, track the barcodes, and maintain
         // graphics for each barcode on screen.  The factory is used by the multi-processor to
         // create a separate tracker instance for each barcode.
-        BarcodeDetector barcodeDetector = new BarcodeDetector.Builder(context).build();
+        MlKitBarcodeDetector barcodeDetector = new MlKitBarcodeDetector();
         BarcodeTrackerFactory barcodeFactory = new BarcodeTrackerFactory(mGraphicOverlay, this);
         barcodeDetector.setProcessor(
                 new MultiProcessor.Builder<>(barcodeFactory).build());
-
-        if (!barcodeDetector.isOperational()) {
-            // Check for low storage.  If there is low storage, the native library will not be
-            // downloaded, so detection will not become operational.
-            IntentFilter lowstorageFilter = new IntentFilter(Intent.ACTION_DEVICE_STORAGE_LOW);
-            boolean hasLowStorage = registerReceiver(null, lowstorageFilter) != null;
-
-            if (hasLowStorage) {
-                Toast.makeText(this, R.string.low_storage_error, Toast.LENGTH_LONG).show();
-            }
-        }
 
         // Creates and starts the camera.  Note that this uses a higher resolution in comparison
         // to other detection examples to enable the barcode detector to detect small barcodes
@@ -355,10 +309,6 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
     public void onRequestPermissionsResult(int requestCode,
                                            @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
-        if (requestCode == RC_HANDLE_GALLERY_PERM) {
-            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-            return;
-        }
         if (requestCode != RC_HANDLE_CAMERA_PERM) {
             super.onRequestPermissionsResult(requestCode, permissions, grantResults);
             return;
@@ -612,30 +562,49 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        // compare the resultCode with the
-        // SELECT_PICTURE constant
-        if (resultCode == RESULT_OK && requestCode == SELECT_PICTURE && data != null
-                && data.getData() != null) {
-            Uri selectedImageUri = data.getData();
-            Bitmap bitmap;
-            try {
-                bitmap
-                        = MediaStore.Images.Media.getBitmap(
-                        this.getContentResolver(),
-                        selectedImageUri);
-                if (barcodeDetector.isOperational() && bitmap != null) {
-                    Frame frame = new Frame.Builder().setBitmap(bitmap).build();
-                    SparseArray<Barcode> barcodes = barcodeDetector.detect(frame);
-                    Barcode code = null;
-                    for (int index = 0; index < barcodes.size(); index++) {
-                        code = barcodes.valueAt(index);
+        if (resultCode != RESULT_OK || requestCode != SELECT_PICTURE || data == null
+                || data.getData() == null) {
+            return;
+        }
+        Uri uri = data.getData();
+        // Per pick: most sessions never use the gallery, and a failed onCreate can't leave it null.
+        BarcodeScanner scanner = BarcodeScanning.getClient();
+        Tasks.call(IMAGE_DECODER, () -> decodeForScan(uri))
+                .onSuccessTask(bitmap -> {
+                    if (bitmap == null) throw new IOException("Unsupported image");
+                    // Rotation 0: ML Kit reads codes in any orientation, so EXIF rotation is not needed.
+                    return scanner.process(InputImage.fromBitmap(bitmap, 0));
+                })
+                .addOnCompleteListener(task -> {
+                    scanner.close();
+                    if (!task.isSuccessful()) {
+                        Log.e("BarcodeCaptureActivity", "Unable to scan picked image", task.getException());
+                        sendResult(null);
+                        return;
                     }
-                    sendResult(code);
+                    SparseArray<Barcode> barcodes = MlKitBarcodeDetector.toVision(task.getResult());
+                    sendResult(barcodes.size() > 0 ? barcodes.valueAt(barcodes.size() - 1) : null);
+                });
+    }
 
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+    /**
+     * Decodes the picked image at most 2000px on its longest side. ML Kit misses codes in large
+     * photos: a 3264x2040 tablet camera shot returned nothing, the same shot at 2400px or less
+     * decoded. Sampling down while decoding also keeps 50MP photos from running out of memory.
+     */
+    private Bitmap decodeForScan(Uri uri) throws IOException {
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        opts.inJustDecodeBounds = true;
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            BitmapFactory.decodeStream(in, null, opts);
+        }
+        opts.inSampleSize = 1;
+        while (Math.max(opts.outWidth, opts.outHeight) / opts.inSampleSize > 2000) {
+            opts.inSampleSize *= 2;
+        }
+        opts.inJustDecodeBounds = false;
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            return BitmapFactory.decodeStream(in, null, opts);
         }
     }
 
