@@ -321,9 +321,18 @@ public class CameraSource {
                 return this;
             }
 
-            mCamera = createCamera();
-            mCamera.setPreviewDisplay(surfaceHolder);
-            mCamera.startPreview();
+            try {
+                mCamera = createCamera();
+                mCamera.setPreviewDisplay(surfaceHolder);
+                mCamera.startPreview();
+            } catch (Exception e) {
+                // Camera.open() throws RuntimeException when the camera is busy or disabled by policy.
+                if (mCamera != null) {
+                    mCamera.release();
+                    mCamera = null;
+                }
+                throw new IOException("Could not start camera", e);
+            }
 
             mProcessingThread = new Thread(mFrameProcessor);
             mFrameProcessor.setActive(true);
@@ -345,6 +354,8 @@ public class CameraSource {
         synchronized (mCameraLock) {
             mFrameProcessor.setActive(false);
             if (mProcessingThread != null) {
+                // Abort a frame stuck waiting on ML Kit, whose result needs this (main) thread.
+                mProcessingThread.interrupt();
                 try {
                     // Wait for the thread to complete to ensure that we can't have multiple threads
                     // executing at the same time (i.e., which would happen if we called start too
@@ -690,7 +701,17 @@ public class CameraSource {
             throw new RuntimeException("Could not find requested camera.");
         }
         Camera camera = Camera.open(requestedCameraId);
+        try {
+            configureCamera(camera, requestedCameraId);
+        } catch (RuntimeException e) {
+            // Release here or the camera stays locked until the process dies.
+            camera.release();
+            throw e;
+        }
+        return camera;
+    }
 
+    private void configureCamera(Camera camera, int requestedCameraId) {
         SizePair sizePair = selectSizePair(camera, mRequestedPreviewWidth, mRequestedPreviewHeight);
         if (sizePair == null) {
             throw new RuntimeException("Could not find suitable preview size.");
@@ -751,8 +772,6 @@ public class CameraSource {
         camera.addCallbackBuffer(createPreviewBuffer(mPreviewSize));
         camera.addCallbackBuffer(createPreviewBuffer(mPreviewSize));
         camera.addCallbackBuffer(createPreviewBuffer(mPreviewSize));
-
-        return camera;
     }
 
     /**
